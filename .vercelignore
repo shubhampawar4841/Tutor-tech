@@ -1,0 +1,11 @@
+backend/
+*.py
+requirements.txt
+runtime.txt
+Procfile
+__pycache__/
+*.pyc
+.env
+*.md
+!my-app/README.md
+
