@@ -1,0 +1,12 @@
+{
+  "buildCommand": "cd my-app && npm run build",
+  "outputDirectory": "my-app/.next",
+  "framework": "nextjs",
+  "installCommand": "cd my-app && npm install",
+  "devCommand": "cd my-app && npm run dev",
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- my-app/",
+  "env": {
+    "NEXT_PUBLIC_API_URL": "@next_public_api_url"
+  }
+}
+
