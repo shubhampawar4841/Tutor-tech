@@ -2,6 +2,7 @@
 DeepTutor FastAPI Backend
 Main application entry point
 """
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -16,7 +17,8 @@ from api.routes import (
     guide,
     co_writer,
     chat,
-    dashboard
+    dashboard,
+    ideagen
 )
 
 app = FastAPI(
@@ -26,9 +28,25 @@ app = FastAPI(
 )
 
 # CORS middleware
+# Allow localhost for development and Vercel for production
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+# Add Vercel URL from environment variable if set
+VERCEL_URL = os.getenv("VERCEL_URL")
+if VERCEL_URL:
+    ALLOWED_ORIGINS.append(f"https://{VERCEL_URL}")
+
+# Also allow any Vercel preview deployments
+FRONTEND_URL = os.getenv("FRONTEND_URL")
+if FRONTEND_URL:
+    ALLOWED_ORIGINS.append(FRONTEND_URL)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -44,6 +62,7 @@ app.include_router(guide.router, prefix="/api/v1/guide", tags=["Guide"])
 app.include_router(co_writer.router, prefix="/api/v1/co-writer", tags=["Co-Writer"])
 app.include_router(chat.router, prefix="/api/v1/chat", tags=["Chat"])
 app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["Dashboard"])
+app.include_router(ideagen.router, prefix="/api/v1/ideagen", tags=["IdeaGen"])
 
 
 @app.get("/")

@@ -64,3 +64,7 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 The schema hasn't been run yet. Follow Step 1 above.
 
 
+
+
+
+

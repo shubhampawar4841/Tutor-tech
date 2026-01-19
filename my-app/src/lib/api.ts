@@ -156,6 +156,16 @@ export const api = {
     getStats: () => apiClient.get('/api/v1/dashboard/stats'),
     getRecent: () => apiClient.get('/api/v1/dashboard/recent'),
   },
+
+  // IdeaGen
+  ideagen: {
+    generate: (data: {
+      notebook_ids?: string[];
+      domain?: string;
+      count?: number;
+      idea_type?: string;
+    }) => apiClient.post('/api/v1/ideagen/generate', data),
+  },
 };
 
 export default apiClient;

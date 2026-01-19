@@ -149,16 +149,58 @@ export default function ResearchPage() {
             </div>
           )}
 
-          {result && (
+          {result && result.status === 'completed' && (
             <div className="bg-white dark:bg-zinc-900 rounded-lg shadow p-6">
               <div className="flex items-center mb-4">
                 <FileText className="h-5 w-5 mr-2 text-green-600" />
                 <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
-                  Research Complete
+                  Research Report
+                </h2>
+              </div>
+              
+              {result.report && (
+                <div className="prose dark:prose-invert max-w-none mb-6">
+                  <div className="whitespace-pre-wrap text-zinc-700 dark:text-zinc-300 leading-relaxed bg-zinc-50 dark:bg-zinc-800 p-6 rounded-md">
+                    {result.report}
+                  </div>
+                </div>
+              )}
+              
+              {result.sections && result.sections.length > 0 && (
+                <div className="mt-6 pt-6 border-t border-zinc-200 dark:border-zinc-700">
+                  <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 mb-3">
+                    Research Sections ({result.sections.length})
+                  </h3>
+                  <div className="space-y-4">
+                    {result.sections.map((section: any, idx: number) => (
+                      <div
+                        key={idx}
+                        className="bg-zinc-50 dark:bg-zinc-800 rounded-lg p-4 border border-zinc-200 dark:border-zinc-700"
+                      >
+                        <h4 className="text-sm font-medium text-zinc-900 dark:text-zinc-50 mb-2">
+                          {section.subtopic || `Section ${idx + 1}`}
+                        </h4>
+                        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                          {section.content}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {result && result.status !== 'completed' && (
+            <div className="bg-white dark:bg-zinc-900 rounded-lg shadow p-6">
+              <div className="flex items-center mb-4">
+                <Search className="h-5 w-5 mr-2 text-blue-600" />
+                <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">
+                  {result.status === 'researching' ? 'Researching...' : 'Processing...'}
                 </h2>
               </div>
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                Report generated successfully. Download or view the report.
+                {result.message || 'Research is still in progress. Please wait...'}
               </p>
             </div>
           )}

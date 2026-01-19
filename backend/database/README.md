@@ -44,3 +44,7 @@ Vector embeddings are stored separately in ChromaDB/FAISS (not in Supabase).
 
 
 
+
+
+
+
