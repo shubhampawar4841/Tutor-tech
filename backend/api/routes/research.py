@@ -158,7 +158,7 @@ async def research_stream(websocket: WebSocket, research_id: str):
                                 })
                             break
             
-            await asyncio.sleep(2)  # Poll every 2 seconds
+            await asyncio.sleep(0.5)  # Poll every 0.5 seconds for more responsive updates
             
     except WebSocketDisconnect:
         pass

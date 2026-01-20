@@ -73,14 +73,15 @@ async def solve_problem(
         }
     
     try:
-        # Use RAG to get context and answer
+        # Use RAG to get context and answer (with optional web search)
         if knowledge_base_id:
             # ask_question is not async, so don't await it
             rag_result = ask_question(
                 question=question,
                 kb_id=knowledge_base_id,
                 top_k=5,
-                threshold=0.3
+                threshold=0.3,
+                use_web_search=use_web_search
             )
             
             if not rag_result or not rag_result.get("success"):

@@ -226,11 +226,18 @@ async def send_chat_message(
                 question=message,
                 kb_id=knowledge_base_id,
                 top_k=3,
-                threshold=0.3
+                threshold=0.3,
+                use_web_search=use_web_search
             )
             if rag_result and rag_result.get("success"):
                 context = rag_result.get("answer", "")
                 citations = rag_result.get("citations", [])
+            elif rag_result and not rag_result.get("success"):
+                # If RAG failed but web search is available, try web search only
+                if use_web_search and WEB_SEARCH_AVAILABLE:
+                    print(f"[CHAT] RAG failed, trying web search only...")
+                    # We'll handle this in the LLM response below
+                    context = None  # Signal that we need to use web search
         
         # Build messages for LLM
         llm_messages = [

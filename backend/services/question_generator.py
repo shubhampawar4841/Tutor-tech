@@ -200,12 +200,13 @@ Relevant Content from Knowledge Base:
 Instructions:
 1. Generate exactly {count} {question_type_desc} about "{knowledge_point}"
 2. Questions should test {difficulty_desc} understanding
-3. Base questions ONLY on the provided content above
+3. Base questions on the provided content above. If content is limited, use your knowledge to create appropriate questions and answers.
 4. For multiple choice: provide 4 options labeled A, B, C, D with one clearly correct answer
-5. For short answer: provide the expected answer
-6. For essay: provide a sample answer or key points
-7. For true/false: provide the correct answer (True or False)
+5. For short answer: provide a COMPLETE, DETAILED expected answer that fully explains the concept
+6. For essay: provide a comprehensive sample answer or detailed key points that cover the topic thoroughly
+7. For true/false: provide the correct answer (True or False) with a brief explanation
 8. Make questions clear, unambiguous, and educational
+9. **CRITICAL**: ALWAYS provide a complete answer for every question. If the content doesn't fully cover the answer, use your knowledge to provide a comprehensive, accurate answer that helps the student learn.
 
 Output Format (JSON):
 Return a JSON object with a "questions" key containing an array:

@@ -177,25 +177,44 @@ def build_guide_prompt(content: Dict[str, Any], max_points: int = 5) -> str:
     context_text = "\n".join(context_parts)
     notebook_names = ", ".join(content.get("notebook_names", []))
     
-    prompt = f"""You are an expert educator creating a structured learning guide from student's saved materials.
-
-IMPORTANT: Use ONLY the actual content provided below. Do NOT make up or invent information. Base your guide strictly on what the student has saved in their notebooks.
+    prompt = f"""You are an expert educator creating a comprehensive, in-depth learning guide from student's saved materials.
 
 Notebooks Used: {notebook_names}
 
-ACTUAL CONTENT FROM NOTEBOOKS:
+CONTENT FROM NOTEBOOKS:
 {context_text}
 
-Create a structured learning guide with {max_points} learning points/steps that:
-1. Uses ONLY the actual content provided above - do not add information not in the notebooks
-2. Organizes the content logically based on what's actually there
-3. Builds from basic concepts to advanced (if the content allows)
-4. Extracts and presents key topics and concepts from the actual saved content
-5. Provides a clear learning path based on the real material
-6. References specific questions, answers, and topics from the notebooks
-7. If content is limited, create a guide that works with what's available
+Create a structured, DEEP learning guide with {max_points} learning points/steps that:
 
-CRITICAL: Your guide must be based on the actual content shown above. Do not invent topics, concepts, or information that isn't in the provided content.
+1. **EXPLAIN CONCEPTS IN DEPTH**: Don't just summarize conclusions. For each concept mentioned in the notebooks:
+   - Explain WHAT it is (definition, core meaning)
+   - Explain WHY it matters (significance, importance, applications)
+   - Explain HOW it works (mechanisms, processes, relationships)
+   - Provide examples and analogies to deepen understanding
+   - Connect concepts to build a complete mental model
+
+2. **BUILD FROM FOUNDATIONS**: Start with fundamental concepts and build up to advanced topics, ensuring each step builds on previous understanding.
+
+3. **PROVIDE RICH CONTEXT**: Use the notebook content as a starting point, but expand on it to provide:
+   - Background information needed to understand the concepts
+   - Related concepts that help form a complete picture
+   - Real-world applications and examples
+   - Common misconceptions and how to avoid them
+
+4. **CREATE LEARNING PATHWAYS**: Organize content into logical learning sequences that help students:
+   - Understand prerequisites before moving to advanced topics
+   - See connections between different concepts
+   - Build comprehensive knowledge step by step
+
+5. **ENSURE COMPREHENSIVE COVERAGE**: For each step, provide:
+   - Clear explanations that go beyond surface-level summaries
+   - Key points that highlight important aspects
+   - Detailed content that teaches, not just references
+   - Connections to related notebook items
+
+6. **TEACH, DON'T JUST REFERENCE**: Your goal is to help students LEARN the concepts deeply, not just review what they saved. Expand on the notebook content to create a true learning experience.
+
+IMPORTANT: While you should base your guide on the notebook content, you should EXPAND and EXPLAIN concepts deeply. Use your knowledge to provide comprehensive explanations that help students truly understand, not just recall what they saved.
 
 Output Format (JSON):
 {{
@@ -208,7 +227,7 @@ Output Format (JSON):
       "title": "Step title",
       "description": "What you'll learn in this step",
       "key_points": ["Point 1", "Point 2", "Point 3"],
-      "content": "Detailed explanation and learning material",
+      "content": "Comprehensive, in-depth explanation that teaches the concept thoroughly. Include definitions, explanations of how/why it works, examples, applications, and connections to other concepts. Aim for deep understanding, not just summary.",
       "related_items": ["Reference to notebook items if relevant"]
     }},
     ...

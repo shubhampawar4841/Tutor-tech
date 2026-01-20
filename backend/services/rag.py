@@ -29,6 +29,15 @@ except ImportError:
     get_document = None
     get_chunks_by_kb = None
 
+# Try to import web search
+try:
+    from services.web_search import search_web, format_web_search_context, is_web_search_configured
+    WEB_SEARCH_AVAILABLE = is_web_search_configured()
+except ImportError:
+    WEB_SEARCH_AVAILABLE = False
+    search_web = None
+    format_web_search_context = None
+
 # Configuration
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")  # Default: cheaper model
@@ -53,7 +62,7 @@ def is_rag_configured() -> bool:
     return OPENAI_AVAILABLE and EMBEDDINGS_AVAILABLE and OPENAI_API_KEY is not None
 
 
-def build_context_prompt(chunks: List[Dict[str, Any]], question: str) -> str:
+def build_context_prompt(chunks: List[Dict[str, Any]], question: str, web_search_context: str = "") -> str:
     """
     Build a prompt with context from retrieved chunks
     
@@ -106,18 +115,29 @@ def build_context_prompt(chunks: List[Dict[str, Any]], question: str) -> str:
             f"{citation} ({source_info})\n{content}\n"
         )
     
+    # Combine all sources
+    all_sources = ''.join(context_parts)
+    
+    # Add web search results if available
+    if web_search_context:
+        # Adjust citation numbers for web sources
+        web_start_num = len(chunks) + 1
+        all_sources += f"\n\n{web_search_context}"
+    
     # Build full prompt
-    prompt = f"""Use only the following sources to answer the question. Cite your sources using [1], [2], etc.
+    prompt = f"""Use the following sources to answer the question. Cite your sources using [1], [2], etc.
 
 Sources:
-{''.join(context_parts)}
+{all_sources}
 
 Question: {question}
 
 Instructions:
-- Answer the question using ONLY the information provided in the sources above
+- Answer the question using the information provided in the sources above
+- Prioritize knowledge base sources [1-{len(chunks)}] when available, but also use web search results if they provide additional valuable information
 - Cite sources using [1], [2], etc. when referencing information
-- If the answer cannot be found in the sources, say "I cannot find the answer in the provided sources"
+- Combine information from multiple sources to provide a comprehensive answer
+- If information from knowledge base is limited, supplement with web search results
 - Be concise but complete
 - Include page numbers in citations when relevant
 
@@ -207,7 +227,8 @@ def ask_question(
     question: str,
     top_k: int = 5,
     threshold: float = 0.7,
-    model: str = None
+    model: str = None,
+    use_web_search: bool = False
 ) -> Dict[str, Any]:
     """
     Main RAG function: Ask a question and get an answer with citations
@@ -280,45 +301,62 @@ def ask_question(
         except Exception as e:
             print(f"[ERROR] Lower threshold search also failed: {e}")
     
-    # Final fallback: get chunks with embeddings (no similarity filtering)
-    if len(similar_chunks) < 1:
-        print(f"[RAG] Final fallback: Getting chunks with embeddings (no similarity filter)...")
-        try:
-            all_chunks = get_chunks_by_kb(kb_id) if get_chunks_by_kb else []
-            print(f"[RAG] Total chunks in KB: {len(all_chunks)}")
-            
-            # Filter chunks with embeddings
-            chunks_with_embeddings = [c for c in all_chunks if c.get("embedding") is not None]
-            print(f"[RAG] Chunks with embeddings: {len(chunks_with_embeddings)}")
-            
-            if chunks_with_embeddings:
-                # Just take first N chunks if similarity search isn't working
-                similar_chunks = chunks_with_embeddings[:top_k]
-                # Add placeholder similarity for display
-                for chunk in similar_chunks:
-                    chunk["similarity"] = 0.75  # Placeholder
-                print(f"[RAG] Using {len(similar_chunks)} chunks from fallback")
-        except Exception as e2:
-            print(f"[ERROR] Final fallback also failed: {e2}")
-            import traceback
-            traceback.print_exc()
-            similar_chunks = []
+    # Check if we have any relevant chunks
+    has_relevant_chunks = len(similar_chunks) > 0
     
-    if not similar_chunks:
+    # If no relevant chunks found, we should use web search instead of random chunks
+    # Random chunks lead to hallucinations
+    if not has_relevant_chunks:
+        print(f"[RAG] No relevant chunks found via vector search")
+        
+        # If web search is available and enabled, we'll use it
+        # Otherwise, return an error instead of using random chunks
+        if not (use_web_search and WEB_SEARCH_AVAILABLE):
+            return {
+                "success": False,
+                "error": f"No relevant content found in knowledge base for this question. Consider:\n1. The question may not be covered in your uploaded documents\n2. Enable web search to find information from the internet\n3. Check if documents are properly processed and embeddings are generated",
+                "answer": None,
+                "citations": [],
+                "suggestion": "enable_web_search" if WEB_SEARCH_AVAILABLE else None
+            }
+        else:
+            print(f"[RAG] No relevant chunks found, will rely on web search only")
+    
+    # Step 3: Get web search results if enabled OR if no relevant chunks found
+    web_search_context = ""
+    web_citations = []
+    should_use_web_search = use_web_search or (not has_relevant_chunks and WEB_SEARCH_AVAILABLE)
+    
+    if should_use_web_search and WEB_SEARCH_AVAILABLE and search_web:
+        print(f"[RAG] Performing web search...")
+        try:
+            web_results = search_web(question, max_results=5 if not has_relevant_chunks else 3)
+            if web_results:
+                web_search_context = format_web_search_context(web_results)
+                web_citations = web_results
+                print(f"[RAG] Found {len(web_results)} web search results")
+            else:
+                print(f"[RAG] Web search returned no results")
+        except Exception as e:
+            print(f"[RAG] Web search error: {e}")
+    
+    # If we have no chunks AND no web results, we can't answer
+    if not has_relevant_chunks and not web_search_context:
         return {
             "success": False,
-            "error": f"No chunks found in knowledge base. Make sure:\n1. Documents are uploaded\n2. Documents are processed (status = 'ready')\n3. Embeddings are generated\n\nCheck the Knowledge Base page to verify document status.",
+            "error": "No relevant information found in knowledge base or via web search. Please try rephrasing your question or check if the topic is covered in your documents.",
             "answer": None,
             "citations": []
         }
     
-    print(f"[RAG] Found {len(similar_chunks)} relevant chunks")
+    if has_relevant_chunks:
+        print(f"[RAG] Found {len(similar_chunks)} relevant chunks")
     
-    # Step 3: Build context prompt
+    # Step 4: Build context prompt (combine RAG + web search)
     print(f"[RAG] Building context prompt...")
-    prompt = build_context_prompt(similar_chunks, question)
+    prompt = build_context_prompt(similar_chunks, question, web_search_context=web_search_context)
     
-    # Step 4: Generate answer
+    # Step 5: Generate answer
     answer = generate_answer(prompt, model=model)
     
     if not answer:
@@ -328,13 +366,16 @@ def ask_question(
             "chunks_retrieved": len(similar_chunks)
         }
     
-    # Step 5: Extract citations
+    # Step 6: Extract citations
     citation_nums = extract_citations(answer)
     
-    # Step 6: Build citation details
+    # Step 7: Build citation details (combine RAG + web citations)
     citations = []
+    rag_citation_count = len(similar_chunks) if similar_chunks else 0
+    
     for num in citation_nums:
-        if 1 <= num <= len(similar_chunks):
+        if 1 <= num <= rag_citation_count:
+            # RAG citation
             chunk = similar_chunks[num - 1]  # Convert to 0-based index
             metadata = chunk.get("metadata", {})
             if isinstance(metadata, str):
@@ -359,14 +400,43 @@ def ask_question(
                 "page_start": metadata.get("page_start", metadata.get("page", "?")),
                 "page_end": metadata.get("page_end", metadata.get("page_start", metadata.get("page", "?"))),
                 "snippet": chunk.get("content", "")[:200] + "..." if len(chunk.get("content", "")) > 200 else chunk.get("content", ""),
-                "similarity": chunk.get("similarity", 0.0) if "similarity" in chunk else None
+                "similarity": chunk.get("similarity", 0.0) if "similarity" in chunk else None,
+                "source": "knowledge_base"
             })
+        elif num > rag_citation_count and web_citations:
+            # Web citation
+            web_idx = num - rag_citation_count - 1
+            if 0 <= web_idx < len(web_citations):
+                web_result = web_citations[web_idx]
+                citations.append({
+                    "id": num,
+                    "title": web_result.get("title", ""),
+                    "url": web_result.get("url", ""),
+                    "snippet": web_result.get("snippet", "")[:200] + "..." if len(web_result.get("snippet", "")) > 200 else web_result.get("snippet", ""),
+                    "source": "web_search",
+                    "search_source": web_result.get("source", "unknown")
+                })
+    
+    # If no RAG chunks but we have web citations, add them with proper numbering
+    if rag_citation_count == 0 and web_citations:
+        for idx, web_result in enumerate(web_citations, 1):
+            if idx not in [c.get("id") for c in citations]:
+                citations.append({
+                    "id": idx,
+                    "title": web_result.get("title", ""),
+                    "url": web_result.get("url", ""),
+                    "snippet": web_result.get("snippet", "")[:200] + "..." if len(web_result.get("snippet", "")) > 200 else web_result.get("snippet", ""),
+                    "source": "web_search",
+                    "search_source": web_result.get("source", "unknown")
+                })
     
     return {
         "success": True,
         "answer": answer,
         "citations": citations,
-        "chunks_retrieved": len(similar_chunks),
+        "chunks_retrieved": len(similar_chunks) if similar_chunks else 0,
+        "web_results_count": len(web_citations) if web_citations else 0,
+        "used_web_search": bool(web_search_context),
         "question": question
     }
 
