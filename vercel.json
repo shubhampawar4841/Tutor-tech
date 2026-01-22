@@ -3,7 +3,5 @@
   "outputDirectory": "my-app/.next",
   "framework": null,
   "installCommand": "cd my-app && npm install",
-  "devCommand": "cd my-app && npm run dev",
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- my-app/"
+  "devCommand": "cd my-app && npm run dev"
 }
-
