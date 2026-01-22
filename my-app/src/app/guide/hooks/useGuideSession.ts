@@ -50,7 +50,7 @@ export function useGuideSession() {
 
       const response = await api.guide.start({
         notebook_ids: Array.from(notebookIds),
-        max_points: 5,
+        max_points: 12,
       });
 
       if (response.data.session_id) {
@@ -247,6 +247,76 @@ function convertKnowledgePointToHTML(kp: any, index: number, total: number): str
   const keyPoints = kp.key_points || [];
   const remedialContent = kp.remedial_content || [];
 
+  // Check if content is structured (new format) or plain string (old format)
+  const isStructuredContent = typeof content === 'object' && content !== null && 
+    (content.intuition || content.definition || content.how_it_works);
+
+  let mainContentHTML = '';
+  
+  if (isStructuredContent) {
+    // New structured teaching format
+    mainContentHTML = `
+      ${content.intuition ? `
+        <div class="guide-section guide-intuition">
+          <h2>💡 Build Your Intuition</h2>
+          <p class="guide-intuition-text">${content.intuition}</p>
+        </div>
+      ` : ''}
+      
+      ${content.definition ? `
+        <div class="guide-section guide-definition">
+          <h2>📖 Definition</h2>
+          <p>${content.definition}</p>
+        </div>
+      ` : ''}
+      
+      ${content.how_it_works ? `
+        <div class="guide-section guide-mechanism">
+          <h2>⚙️ How It Works</h2>
+          <div class="guide-mechanism-content">
+            ${content.how_it_works.split('\n').map((para: string) => 
+              para.trim() ? `<p>${para}</p>` : ''
+            ).join('')}
+          </div>
+        </div>
+      ` : ''}
+      
+      ${content.why_it_matters ? `
+        <div class="guide-section guide-importance">
+          <h2>🌟 Why It Matters</h2>
+          <p>${content.why_it_matters}</p>
+        </div>
+      ` : ''}
+      
+      ${content.examples && Array.isArray(content.examples) && content.examples.length > 0 ? `
+        <div class="guide-section guide-examples">
+          <h2>📚 Real-World Examples</h2>
+          <ul class="guide-examples-list">
+            ${content.examples.map((example: string) => `<li>${example}</li>`).join('')}
+          </ul>
+        </div>
+      ` : ''}
+      
+      ${content.common_mistakes && Array.isArray(content.common_mistakes) && content.common_mistakes.length > 0 ? `
+        <div class="guide-section guide-mistakes">
+          <h2>⚠️ Common Mistakes to Avoid</h2>
+          <ul class="guide-mistakes-list">
+            ${content.common_mistakes.map((mistake: string) => `<li>${mistake}</li>`).join('')}
+          </ul>
+        </div>
+      ` : ''}
+    `;
+  } else {
+    // Old format - plain string content
+    mainContentHTML = `
+      <div class="guide-main-content">
+        ${typeof content === 'string' ? content.split('\n').map((para: string) => 
+          para.trim() ? `<p>${para}</p>` : ''
+        ).join('') : ''}
+      </div>
+    `;
+  }
+
   return `
     <div class="guide-content">
       <div class="guide-header">
@@ -264,11 +334,7 @@ function convertKnowledgePointToHTML(kp: any, index: number, total: number): str
         </div>
       ` : ''}
       
-      <div class="guide-main-content">
-        ${content.split('\n').map((para: string) => 
-          para.trim() ? `<p>${para}</p>` : ''
-        ).join('')}
-      </div>
+      ${mainContentHTML}
       
       ${remedialContent.length > 0 ? `
         <div class="guide-remedial">

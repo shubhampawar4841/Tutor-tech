@@ -10,7 +10,8 @@ try:
         start_research,
         get_research_status,
         get_research_result,
-        is_research_configured
+        is_research_configured,
+        generate_research_plan
     )
     RESEARCH_SERVICE_AVAILABLE = True
 except ImportError:
@@ -18,6 +19,7 @@ except ImportError:
     start_research = None
     get_research_status = None
     get_research_result = None
+    generate_research_plan = None
 
 router = APIRouter()
 
@@ -28,6 +30,32 @@ class ResearchStartRequest(BaseModel):
     mode: str = "auto"  # auto or manual
     max_subtopics: int = 5
     execution_mode: str = "series"  # series or parallel
+
+
+@router.post("/plan")
+async def generate_research_plan_endpoint(request: ResearchStartRequest):
+    """Generate a plan for a research task"""
+    if not RESEARCH_SERVICE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Research service not available")
+    
+    if not is_research_configured():
+        raise HTTPException(status_code=503, detail="Research service not configured. OpenAI API key required.")
+    
+    try:
+        plan_result = await generate_research_plan(
+            topic=request.topic,
+            knowledge_base_id=request.knowledge_base_id,
+            max_subtopics=request.max_subtopics
+        )
+        
+        if not plan_result.get("success"):
+            raise HTTPException(status_code=500, detail=plan_result.get("error", "Failed to generate research plan"))
+        
+        return plan_result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating research plan: {str(e)}")
 
 
 @router.post("/start")

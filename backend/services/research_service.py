@@ -443,3 +443,139 @@ def get_research_result(research_id: str) -> Optional[Dict[str, Any]]:
         "message": "Research still in progress"
     }
 
+
+async def generate_research_plan(
+    topic: str,
+    knowledge_base_id: Optional[str] = None,
+    max_subtopics: int = 5
+) -> Dict[str, Any]:
+    """
+    Generates a plan for a research task.
+    """
+    if not is_research_configured():
+        return {
+            "success": False,
+            "error": "OpenAI API not configured. Set OPENAI_API_KEY in .env",
+            "plan": None
+        }
+
+    try:
+        http_client = create_http_client()
+        client = OpenAI(
+            api_key=OPENAI_API_KEY,
+            http_client=http_client
+        ) if http_client else OpenAI(api_key=OPENAI_API_KEY)
+
+        # Generate initial subtopics to include in the plan
+        initial_subtopics = await generate_subtopics(topic, max_count=max_subtopics)
+
+        plan_prompt = f"""You are an AI planning assistant. Create a detailed plan for a comprehensive research task.
+
+The research topic is: "{topic}"
+The user wants to research approximately {max_subtopics} subtopics.
+
+Your plan should include:
+- A clear title for the plan
+- A brief description of the overall research goal
+- A list of sequential steps, each with:
+    - A description of the action
+    - An estimated time (e.g., "1-2 minutes")
+    - Key outcomes
+- An overall estimated total time
+- A list of key subtopics that will be researched.
+
+Return the plan as a JSON object:
+{{
+  "title": "Research Plan for '{topic}'",
+  "description": "Conducting deep research to generate a comprehensive report on '{topic}'.",
+  "steps": [
+    {{
+      "action": "Generate detailed subtopics for '{topic}'",
+      "estimated_time": "30 seconds",
+      "outcome": "A structured list of key areas to investigate is created."
+    }},
+    {{
+      "action": "Gather information for each subtopic using available knowledge bases and web search",
+      "estimated_time": "2-5 minutes per subtopic",
+      "outcome": "Relevant data, facts, and insights are collected for each area."
+    }},
+    {{
+      "action": "Synthesize gathered information into coherent sections",
+      "estimated_time": "1-2 minutes",
+      "outcome": "Raw data is transformed into structured, readable content."
+    }},
+    {{
+      "action": "Generate a comprehensive research report",
+      "estimated_time": "1-2 minutes",
+      "outcome": "A final, well-organized report summarizing all findings is produced."
+    }}
+  ],
+  "total_estimated_time": "Approximately {max_subtopics * 3 + 3} minutes (depending on subtopics)",
+  "key_subtopics": {json.dumps(initial_subtopics)}
+}}
+"""
+        response = client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an AI planning assistant. Generate plans in valid JSON format. Return only the JSON object, no additional text."
+                },
+                {
+                    "role": "user",
+                    "content": plan_prompt
+                }
+            ],
+            temperature=0.3,
+            max_tokens=1000,
+        )
+
+        plan_text = response.choices[0].message.content.strip()
+        
+        import json
+        import re
+
+        try:
+            plan = json.loads(plan_text)
+        except json.JSONDecodeError:
+            json_match = re.search(r'\{[\s\S]*\}', plan_text, re.MULTILINE)
+            if json_match:
+                try:
+                    plan = json.loads(json_match.group())
+                except:
+                    plan = {
+                        "title": "Fallback Research Plan",
+                        "description": "Could not parse plan. Proceeding with standard research.",
+                        "steps": [],
+                        "total_estimated_time": "Unknown",
+                        "key_subtopics": initial_subtopics
+                    }
+            else:
+                plan = {
+                    "title": "Fallback Research Plan",
+                    "description": plan_text[:500] if plan_text else "Could not generate plan.",
+                    "steps": [],
+                    "total_estimated_time": "Unknown",
+                    "key_subtopics": initial_subtopics
+                }
+        
+        plan.setdefault("title", f"Research Plan for '{topic}'")
+        plan.setdefault("description", f"Conducting deep research to generate a comprehensive report on '{topic}'.")
+        plan.setdefault("steps", [])
+        plan.setdefault("total_estimated_time", "Unknown")
+        plan.setdefault("key_subtopics", initial_subtopics)
+
+        return {
+            "success": True,
+            "plan": plan
+        }
+    except Exception as e:
+        print(f"[RESEARCH] Error generating research plan: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": f"Failed to generate plan: {str(e)}",
+            "plan": None
+        }
+

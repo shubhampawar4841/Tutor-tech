@@ -2,7 +2,24 @@
 
 import { X, CheckCircle2, Clock, Zap, Loader2 } from 'lucide-react';
 
-interface PlanStep {
+// Backend plan format (from API)
+interface BackendPlanStep {
+  action: string;
+  estimated_time: string;
+  outcome: string;
+}
+
+interface BackendPlan {
+  title: string;
+  description: string;
+  steps: BackendPlanStep[];
+  total_estimated_time: string;
+  key_topics_covered?: string[];
+  key_subtopics?: string[];
+}
+
+// Legacy plan format (if needed)
+interface LegacyPlanStep {
   step_number: number;
   name: string;
   description: string;
@@ -10,14 +27,16 @@ interface PlanStep {
   dependencies?: number[];
 }
 
-interface Plan {
+interface LegacyPlan {
   overview: string;
-  steps: PlanStep[];
+  steps: LegacyPlanStep[];
   estimated_total_time: string;
   complexity: string;
   resources: string[];
   subtopics?: string[];
 }
+
+type Plan = BackendPlan | LegacyPlan;
 
 interface PlanModalProps {
   isOpen: boolean;
@@ -37,6 +56,51 @@ export default function PlanModal({
   onModify,
 }: PlanModalProps) {
   if (!isOpen) return null;
+
+  // Check if it's backend format or legacy format
+  const isBackendFormat = (p: Plan): p is BackendPlan => {
+    return 'title' in p && 'description' in p && Array.isArray(p.steps) && p.steps.length > 0 && 'action' in p.steps[0];
+  };
+
+  const getPlanTitle = (p: Plan | null) => {
+    if (!p) return 'Plan';
+    if (isBackendFormat(p)) return p.title || 'Generated Plan';
+    return 'Research Plan';
+  };
+
+  const getPlanDescription = (p: Plan | null) => {
+    if (!p) return '';
+    if (isBackendFormat(p)) return p.description || '';
+    return (p as LegacyPlan).overview || '';
+  };
+
+  const getEstimatedTime = (p: Plan | null) => {
+    if (!p) return 'Unknown';
+    if (isBackendFormat(p)) return p.total_estimated_time || 'Unknown';
+    return (p as LegacyPlan).estimated_total_time || 'Unknown';
+  };
+
+  const getSteps = (p: Plan | null): Array<{ step_number: number; name: string; description: string; estimated_time: string; dependencies?: number[] }> => {
+    if (!p) return [];
+    if (isBackendFormat(p)) {
+      return p.steps.map((step, idx) => ({
+        step_number: idx + 1,
+        name: step.action,
+        description: step.outcome,
+        estimated_time: step.estimated_time,
+        dependencies: undefined,
+      }));
+    }
+    return (p as LegacyPlan).steps;
+  };
+
+  const getTopics = (p: Plan | null) => {
+    if (!p) return [];
+    if (isBackendFormat(p)) {
+      return p.key_topics_covered || p.key_subtopics || [];
+    }
+    return (p as LegacyPlan).subtopics || [];
+  };
 
   const getComplexityColor = (complexity: string) => {
     switch (complexity.toLowerCase()) {
@@ -58,7 +122,7 @@ export default function PlanModal({
         <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
           <div>
             <h2 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-              Research Plan
+              {getPlanTitle(plan)}
             </h2>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
               Review the plan before execution
@@ -79,7 +143,7 @@ export default function PlanModal({
             <div className="flex flex-col items-center justify-center py-12">
               <Loader2 className="w-12 h-12 text-blue-600 dark:text-blue-400 animate-spin mb-4" />
               <p className="text-slate-600 dark:text-slate-400">
-                Generating research plan...
+                Generating plan...
               </p>
             </div>
           ) : plan ? (
@@ -90,7 +154,7 @@ export default function PlanModal({
                   Overview
                 </h3>
                 <p className="text-slate-700 dark:text-slate-300">
-                  {plan.overview}
+                  {getPlanDescription(plan)}
                 </p>
               </div>
 
@@ -104,7 +168,7 @@ export default function PlanModal({
                     </span>
                   </div>
                   <p className="text-lg font-semibold text-blue-600 dark:text-blue-400">
-                    {plan.estimated_total_time}
+                    {getEstimatedTime(plan)}
                   </p>
                 </div>
 
@@ -117,10 +181,10 @@ export default function PlanModal({
                   </div>
                   <p
                     className={`text-lg font-semibold ${getComplexityColor(
-                      plan.complexity
+                      (plan as LegacyPlan).complexity || 'medium'
                     )}`}
                   >
-                    {plan.complexity}
+                    {(plan as LegacyPlan).complexity || 'Medium'}
                   </p>
                 </div>
 
@@ -132,7 +196,7 @@ export default function PlanModal({
                     </span>
                   </div>
                   <p className="text-lg font-semibold text-green-600 dark:text-green-400">
-                    {plan.steps.length}
+                    {getSteps(plan).length}
                   </p>
                 </div>
               </div>
@@ -143,14 +207,14 @@ export default function PlanModal({
                   Execution Steps
                 </h3>
                 <div className="space-y-3">
-                  {plan.steps.map((step, idx) => (
+                  {getSteps(plan).map((step, idx) => (
                     <div
-                      key={step.step_number}
+                      key={step.step_number || idx}
                       className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 bg-slate-50 dark:bg-slate-900/50"
                     >
                       <div className="flex items-start gap-3">
                         <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-600 dark:bg-blue-500 text-white flex items-center justify-center font-semibold text-sm">
-                          {step.step_number}
+                          {step.step_number || idx + 1}
                         </div>
                         <div className="flex-1">
                           <h4 className="font-semibold text-slate-900 dark:text-slate-100 mb-1">
@@ -177,33 +241,33 @@ export default function PlanModal({
                 </div>
               </div>
 
-              {/* Subtopics */}
-              {plan.subtopics && plan.subtopics.length > 0 && (
+              {/* Topics/Subtopics */}
+              {getTopics(plan).length > 0 && (
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-3">
-                    Subtopics to Research
+                    {isBackendFormat(plan) && plan.key_topics_covered ? 'Key Topics' : 'Subtopics to Research'}
                   </h3>
                   <div className="flex flex-wrap gap-2">
-                    {plan.subtopics.map((subtopic, idx) => (
+                    {getTopics(plan).map((topic, idx) => (
                       <span
                         key={idx}
                         className="px-3 py-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-full text-sm"
                       >
-                        {subtopic}
+                        {topic}
                       </span>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Resources */}
-              {plan.resources && plan.resources.length > 0 && (
+              {/* Resources (legacy format only) */}
+              {!isBackendFormat(plan) && (plan as LegacyPlan).resources && (plan as LegacyPlan).resources.length > 0 && (
                 <div>
                   <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-3">
                     Resources
                   </h3>
                   <div className="flex flex-wrap gap-2">
-                    {plan.resources.map((resource, idx) => (
+                    {(plan as LegacyPlan).resources.map((resource, idx) => (
                       <span
                         key={idx}
                         className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-full text-sm"

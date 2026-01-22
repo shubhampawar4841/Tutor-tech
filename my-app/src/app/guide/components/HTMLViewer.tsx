@@ -104,6 +104,125 @@ export function HTMLViewer({ html, currentIndex, loadingMessage, onOpenDebugModa
                   margin-bottom: 1rem;
                   line-height: 1.8;
                 }
+                .guide-section {
+                  margin: 2rem 0;
+                  padding: 1.5rem;
+                  border-radius: 0.5rem;
+                }
+                .guide-section h2 {
+                  font-size: 1.5rem;
+                  font-weight: 600;
+                  margin-bottom: 1rem;
+                }
+                .guide-intuition {
+                  background: #fef3c7;
+                  border-left: 4px solid #f59e0b;
+                }
+                .dark .guide-intuition {
+                  background: #451a03;
+                  border-left-color: #fbbf24;
+                }
+                .guide-intuition h2 {
+                  color: #92400e;
+                }
+                .dark .guide-intuition h2 {
+                  color: #fbbf24;
+                }
+                .guide-intuition-text {
+                  font-size: 1.1rem;
+                  line-height: 1.8;
+                  font-style: italic;
+                }
+                .guide-definition {
+                  background: #dbeafe;
+                  border-left: 4px solid #3b82f6;
+                }
+                .dark .guide-definition {
+                  background: #1e3a5f;
+                  border-left-color: #60a5fa;
+                }
+                .guide-definition h2 {
+                  color: #1e40af;
+                }
+                .dark .guide-definition h2 {
+                  color: #93c5fd;
+                }
+                .guide-mechanism {
+                  background: #e0e7ff;
+                  border-left: 4px solid #6366f1;
+                }
+                .dark .guide-mechanism {
+                  background: #312e81;
+                  border-left-color: #818cf8;
+                }
+                .guide-mechanism h2 {
+                  color: #4338ca;
+                }
+                .dark .guide-mechanism h2 {
+                  color: #a5b4fc;
+                }
+                .guide-mechanism-content p {
+                  margin-bottom: 1rem;
+                  line-height: 1.8;
+                }
+                .guide-importance {
+                  background: #dcfce7;
+                  border-left: 4px solid #22c55e;
+                }
+                .dark .guide-importance {
+                  background: #14532d;
+                  border-left-color: #4ade80;
+                }
+                .guide-importance h2 {
+                  color: #15803d;
+                }
+                .dark .guide-importance h2 {
+                  color: #86efac;
+                }
+                .guide-examples {
+                  background: #f3e8ff;
+                  border-left: 4px solid #a855f7;
+                }
+                .dark .guide-examples {
+                  background: #581c87;
+                  border-left-color: #c084fc;
+                }
+                .guide-examples h2 {
+                  color: #7e22ce;
+                }
+                .dark .guide-examples h2 {
+                  color: #d8b4fe;
+                }
+                .guide-examples-list {
+                  list-style: disc;
+                  margin-left: 1.5rem;
+                }
+                .guide-examples-list li {
+                  margin-bottom: 0.75rem;
+                  line-height: 1.7;
+                }
+                .guide-mistakes {
+                  background: #fee2e2;
+                  border-left: 4px solid #ef4444;
+                }
+                .dark .guide-mistakes {
+                  background: #7f1d1d;
+                  border-left-color: #f87171;
+                }
+                .guide-mistakes h2 {
+                  color: #dc2626;
+                }
+                .dark .guide-mistakes h2 {
+                  color: #fca5a5;
+                }
+                .guide-mistakes-list {
+                  list-style: disc;
+                  margin-left: 1.5rem;
+                }
+                .guide-mistakes-list li {
+                  margin-bottom: 0.75rem;
+                  line-height: 1.7;
+                }
                 .guide-questions {
                   background: #fef3c7;
                   border: 1px solid #fbbf24;

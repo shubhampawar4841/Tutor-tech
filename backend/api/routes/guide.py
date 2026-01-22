@@ -15,7 +15,7 @@ try:
         update_guide_session as db_update_guide_session,
         is_supabase_configured
     )
-    from services.guide_generator import generate_guide
+    from services.guide_generator import generate_guide, generate_guide_plan
     USE_DATABASE = is_supabase_configured()
     GUIDE_GENERATOR_AVAILABLE = True
 except ImportError:
@@ -25,11 +25,12 @@ except ImportError:
     db_get_guide_session = None
     db_update_guide_session = None
     generate_guide = None
+    generate_guide_plan = None
 
 
 class GuideStartRequest(BaseModel):
     notebook_ids: List[str]
-    max_points: int = 5
+    max_points: int = 12
 
 
 class AnswerSubmission(BaseModel):
@@ -40,6 +41,34 @@ class AnswerSubmission(BaseModel):
 
 class ChatMessage(BaseModel):
     message: str
+
+
+@router.post("/plan")
+async def generate_guide_plan_endpoint(request: GuideStartRequest):
+    """Generate a plan for creating a learning guide"""
+    if not GUIDE_GENERATOR_AVAILABLE or not generate_guide_plan:
+        raise HTTPException(status_code=503, detail="Guide generator not available")
+    
+    if not request.notebook_ids:
+        raise HTTPException(status_code=400, detail="At least one notebook ID is required")
+    
+    try:
+        plan_result = generate_guide_plan(
+            notebook_ids=request.notebook_ids,
+            max_points=request.max_points
+        )
+        
+        if not plan_result.get("success"):
+            raise HTTPException(
+                status_code=500,
+                detail=plan_result.get("error", "Failed to generate guide plan")
+            )
+        
+        return plan_result
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating guide plan: {str(e)}")
 
 
 @router.post("/start")
@@ -473,6 +502,32 @@ async def guide_chat(session_id: str, chat_message: ChatMessage):
             kp_description = current_kp_data.get('description', '')
             kp_key_points = current_kp_data.get('key_points', [])
             
+            # Handle both old format (string) and new format (structured dict)
+            if isinstance(kp_content, dict):
+                # New structured format - convert to readable text
+                content_parts = []
+                if kp_content.get('intuition'):
+                    content_parts.append(f"INTUITION: {kp_content['intuition']}")
+                if kp_content.get('definition'):
+                    content_parts.append(f"DEFINITION: {kp_content['definition']}")
+                if kp_content.get('how_it_works'):
+                    content_parts.append(f"HOW IT WORKS: {kp_content['how_it_works']}")
+                if kp_content.get('why_it_matters'):
+                    content_parts.append(f"WHY IT MATTERS: {kp_content['why_it_matters']}")
+                if kp_content.get('examples'):
+                    examples_text = "\n".join(f"- {ex}" for ex in kp_content['examples'])
+                    content_parts.append(f"EXAMPLES:\n{examples_text}")
+                if kp_content.get('common_mistakes'):
+                    mistakes_text = "\n".join(f"- {mistake}" for mistake in kp_content['common_mistakes'])
+                    content_parts.append(f"COMMON MISTAKES:\n{mistakes_text}")
+                kp_content_text = "\n\n".join(content_parts)
+            else:
+                # Old format - string content
+                kp_content_text = str(kp_content) if kp_content else ""
+            
+            # Limit content length for context
+            kp_content_text = kp_content_text[:3000] if len(kp_content_text) > 3000 else kp_content_text
+            
             # Try to get RAG context from notebook content if available
             try:
                 from services.rag import ask_question
@@ -493,7 +548,7 @@ async def guide_chat(session_id: str, chat_message: ChatMessage):
 CURRENT LEARNING TOPIC: {kp_title}
 
 LEARNING CONTENT (ONLY SOURCE OF INFORMATION):
-{kp_content[:3000]}
+{kp_content_text}
 
 DESCRIPTION: {kp_description}
 

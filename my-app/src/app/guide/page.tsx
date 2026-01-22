@@ -18,6 +18,8 @@ import {
   CompletionSummary,
 } from './components';
 import { useGuideSession, useNotebookSelection } from './hooks';
+import { api } from '@/lib/api';
+import PlanModal from '@/components/PlanModal';
 
 export default function GuidePage() {
   // Notebook selection hook
@@ -57,6 +59,12 @@ export default function GuidePage() {
   const [showDebugModal, setShowDebugModal] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarWide, setSidebarWide] = useState(false);
+  
+  // Plan mode state
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [plan, setPlan] = useState<any>(null);
+  const [generatingPlan, setGeneratingPlan] = useState(false);
+  const [pendingNotebookIds, setPendingNotebookIds] = useState<string[]>([]);
 
   // Load notebooks on mount
   useEffect(() => {
@@ -67,8 +75,42 @@ export default function GuidePage() {
   const leftWidthPercent = sidebarCollapsed ? 0 : sidebarWide ? 75 : 25;
   const rightWidthPercent = sidebarCollapsed ? 100 : sidebarWide ? 25 : 75;
 
-  const handleCreateSession = () => {
-    createSession(selectedRecords);
+  const handleCreateSession = async () => {
+    // Extract notebook IDs
+    const notebookIds = new Set<string>();
+    selectedRecords.forEach(recordKey => {
+      const [notebookId] = recordKey.split(':');
+      notebookIds.add(notebookId);
+    });
+
+    setPendingNotebookIds(Array.from(notebookIds));
+    
+    // Generate plan first
+    setGeneratingPlan(true);
+    try {
+      const response = await api.guide.plan({
+        notebook_ids: Array.from(notebookIds),
+        max_points: 12,
+      });
+
+      if (response.data.success) {
+        setPlan(response.data.plan);
+        setShowPlanModal(true);
+      } else {
+        alert(response.data.error || 'Failed to generate plan');
+      }
+    } catch (error: any) {
+      console.error('Failed to generate plan:', error);
+      alert(error.response?.data?.detail || 'Failed to generate plan');
+    } finally {
+      setGeneratingPlan(false);
+    }
+  };
+
+  const handleApprovePlan = async () => {
+    setShowPlanModal(false);
+    // Now create session with approved plan
+    await createSession(selectedRecords);
   };
 
   const handleFixHtml = async (description: string) => {
@@ -95,10 +137,10 @@ export default function GuidePage() {
             expandedNotebooks={expandedNotebooks}
             notebookRecordsMap={notebookRecordsMap}
             selectedRecords={selectedRecords}
-            loadingNotebooks={loadingNotebooks}
-            loadingRecordsFor={loadingRecordsFor}
-            isLoading={isLoading}
-            onToggleExpanded={toggleNotebookExpanded}
+                    loadingNotebooks={loadingNotebooks}
+                    loadingRecordsFor={loadingRecordsFor}
+                    isLoading={isLoading || generatingPlan}
+                    onToggleExpanded={toggleNotebookExpanded}
             onToggleRecord={toggleRecordSelection}
             onSelectAll={selectAllFromNotebook}
             onDeselectAll={deselectAllFromNotebook}
@@ -205,6 +247,17 @@ export default function GuidePage() {
         onClose={() => setShowDebugModal(false)}
         onFix={handleFixHtml}
       />
+
+      {/* Plan Modal */}
+      {plan && (
+        <PlanModal
+          isOpen={showPlanModal}
+          plan={plan}
+          loading={generatingPlan}
+          onApprove={handleApprovePlan}
+          onCancel={() => setShowPlanModal(false)}
+        />
+      )}
     </div>
   );
 }

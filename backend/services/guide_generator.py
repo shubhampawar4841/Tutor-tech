@@ -35,6 +35,8 @@ except ImportError:
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
+# Use gpt-4o for guide generation (better teaching quality)
+GUIDE_LLM_MODEL = os.getenv("GUIDE_LLM_MODEL", "gpt-4o")
 
 
 def is_guide_configured() -> bool:
@@ -108,7 +110,7 @@ def extract_notebook_content(notebook_ids: List[str]) -> Dict[str, Any]:
     return all_content
 
 
-def build_guide_prompt(content: Dict[str, Any], max_points: int = 5) -> str:
+def build_guide_prompt(content: Dict[str, Any], max_points: int = 12) -> str:
     """
     Build prompt for generating learning guide
     
@@ -177,49 +179,66 @@ def build_guide_prompt(content: Dict[str, Any], max_points: int = 5) -> str:
     context_text = "\n".join(context_parts)
     notebook_names = ", ".join(content.get("notebook_names", []))
     
-    prompt = f"""You are an expert educator creating a comprehensive, in-depth learning guide from student's saved materials.
+    prompt = f"""You are a PROFESSOR teaching a student who knows NOTHING about this topic. Your job is to TEACH from zero, not summarize.
 
 Notebooks Used: {notebook_names}
 
 CONTENT FROM NOTEBOOKS:
 {context_text}
 
-Create a structured, DEEP learning guide with {max_points} learning points/steps that:
+CRITICAL TEACHING REQUIREMENTS:
 
-1. **EXPLAIN CONCEPTS IN DEPTH**: Don't just summarize conclusions. For each concept mentioned in the notebooks:
-   - Explain WHAT it is (definition, core meaning)
-   - Explain WHY it matters (significance, importance, applications)
-   - Explain HOW it works (mechanisms, processes, relationships)
-   - Provide examples and analogies to deepen understanding
-   - Connect concepts to build a complete mental model
+You must create {max_points} knowledge points that TEACH, not summarize. Each knowledge point must be SMALL and FOCUSED on ONE concept.
 
-2. **BUILD FROM FOUNDATIONS**: Start with fundamental concepts and build up to advanced topics, ensuring each step builds on previous understanding.
+For EVERY knowledge point, you MUST follow this structure:
 
-3. **PROVIDE RICH CONTEXT**: Use the notebook content as a starting point, but expand on it to provide:
-   - Background information needed to understand the concepts
-   - Related concepts that help form a complete picture
-   - Real-world applications and examples
-   - Common misconceptions and how to avoid them
+1. **START WITH INTUITION/STORY/ANALOGY** (REQUIRED):
+   - Begin with a relatable analogy, story, or mental model
+   - Make it concrete and visual
+   - Example: "Imagine Earth like a bank account of energy..."
+   - This helps the student build intuition BEFORE learning definitions
 
-4. **CREATE LEARNING PATHWAYS**: Organize content into logical learning sequences that help students:
-   - Understand prerequisites before moving to advanced topics
-   - See connections between different concepts
-   - Build comprehensive knowledge step by step
+2. **THEN GIVE SIMPLE DEFINITION** (REQUIRED):
+   - After building intuition, provide a clear, simple definition
+   - Use plain language, not jargon
+   - Connect it back to the intuition/analogy
 
-5. **ENSURE COMPREHENSIVE COVERAGE**: For each step, provide:
-   - Clear explanations that go beyond surface-level summaries
-   - Key points that highlight important aspects
-   - Detailed content that teaches, not just references
-   - Connections to related notebook items
+3. **EXPLAIN HOW IT WORKS** (REQUIRED):
+   - Break down the mechanism step-by-step
+   - Show the process, not just the conclusion
+   - Use "first... then... finally..." structure
+   - Make it visual and concrete
 
-6. **TEACH, DON'T JUST REFERENCE**: Your goal is to help students LEARN the concepts deeply, not just review what they saved. Expand on the notebook content to create a true learning experience.
+4. **EXPLAIN WHY IT MATTERS** (REQUIRED):
+   - What happens if it works correctly?
+   - What happens if it breaks?
+   - Why should the student care?
+   - Real-world consequences
 
-IMPORTANT: 
-- While you should base your guide on the notebook content, you should EXPAND and EXPLAIN concepts deeply. Use your knowledge to provide comprehensive explanations that help students truly understand, not just recall what they saved.
-- **DO NOT generate questions** - questions will be matched from notebooks based on topic. Focus on creating excellent teaching content.
-- Focus on teaching concepts from first principles, building understanding step by step, not just summarizing conclusions.
+5. **GIVE REAL-WORLD EXAMPLES** (REQUIRED):
+   - At least 2-3 concrete examples
+   - Connect to everyday life
+   - Show different contexts where it applies
 
-Output Format (JSON):
+6. **EXPLAIN COMMON MISTAKES** (REQUIRED):
+   - What misconceptions do students have?
+   - How to avoid them?
+   - What to watch out for?
+
+FORBIDDEN:
+❌ NO Wikipedia-style summaries
+❌ NO definition-only explanations
+❌ NO conclusion-only statements
+❌ NO "X is Y" without explaining WHY and HOW
+
+REQUIRED:
+✅ Start with intuition/story/analogy
+✅ Build understanding step-by-step
+✅ Explain mechanisms, not just conclusions
+✅ Use examples and real-world connections
+✅ Teach from zero knowledge
+
+Output Format (JSON) - STRICT STRUCTURE:
 {{
   "title": "Learning Guide Title",
   "description": "Brief description of what will be learned",
@@ -227,16 +246,33 @@ Output Format (JSON):
   "knowledge_points": [
     {{
       "knowledge_point_number": 1,
-      "knowledge_title": "Knowledge point title",
+      "knowledge_title": "Knowledge point title (one small concept)",
       "description": "What you'll learn in this knowledge point",
-      "key_points": ["Point 1", "Point 2", "Point 3"],
-      "content": "Comprehensive, in-depth explanation that teaches the concept thoroughly. Include definitions, explanations of how/why it works, examples, applications, and connections to other concepts. Aim for deep understanding, not just summary. Break down complex ideas into digestible parts. Use analogies and real-world examples.",
+      "content": {{
+        "intuition": "Start here: A relatable analogy, story, or mental model that builds intuition. Make it concrete and visual. Example: 'Imagine Earth like a bank account of energy...'",
+        "definition": "After intuition: A clear, simple definition in plain language. Connect it back to the intuition.",
+        "how_it_works": "Step-by-step explanation of the mechanism. Use 'first... then... finally...' structure. Show the process, not just the conclusion.",
+        "why_it_matters": "What happens if it works correctly? What happens if it breaks? Why should the student care? Real-world consequences.",
+        "examples": [
+          "Example 1: Concrete, real-world example",
+          "Example 2: Another example in different context",
+          "Example 3: One more example"
+        ],
+        "common_mistakes": [
+          "Common misconception 1 and how to avoid it",
+          "Common misconception 2 and what to watch out for"
+        ]
+      }},
+      "key_points": ["Key takeaway 1", "Key takeaway 2", "Key takeaway 3"],
       "questions": [],  // Questions will be matched from notebooks - leave empty
       "related_items": ["Reference to notebook items if relevant"]
     }},
     ...
   ]
 }}
+
+CRITICAL: Each knowledge point must be SMALL and FOCUSED. Break complex topics into multiple small knowledge points. 
+For example, "Heat Budget" should be split into: "Energy Balance Concept", "Incoming Solar Radiation", "Outgoing Terrestrial Radiation", "Heat Budget Balance", etc.
 
 NOTE: Questions will be automatically matched from notebooks based on topic. Leave the "questions" array empty in your response.
 
@@ -716,7 +752,7 @@ Return JSON:
         }
 
 
-def generate_guide(notebook_ids: List[str], max_points: int = 5) -> Dict[str, Any]:
+def generate_guide(notebook_ids: List[str], max_points: int = 12) -> Dict[str, Any]:
     """
     Generate a learning guide from notebooks
     
@@ -759,7 +795,7 @@ def generate_guide(notebook_ids: List[str], max_points: int = 5) -> Dict[str, An
         prompt = build_guide_prompt(content, max_points)
         
         # Step 3: Generate guide using LLM
-        print(f"[GUIDE] Generating learning guide using {LLM_MODEL}...")
+        print(f"[GUIDE] Generating learning guide using {GUIDE_LLM_MODEL}...")
         
         if OPENAI_API_KEY and "OPENAI_API_KEY" not in os.environ:
             os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
@@ -771,7 +807,7 @@ def generate_guide(notebook_ids: List[str], max_points: int = 5) -> Dict[str, An
             client = OpenAI(api_key=OPENAI_API_KEY)
         
         response = client.chat.completions.create(
-            model=LLM_MODEL,
+            model=GUIDE_LLM_MODEL,
             messages=[
                 {
                     "role": "system",
@@ -783,7 +819,7 @@ def generate_guide(notebook_ids: List[str], max_points: int = 5) -> Dict[str, An
                 }
             ],
             temperature=0.7,
-            max_tokens=4000,
+            max_tokens=8000,  # Increased for structured teaching content with more knowledge points
         )
         
         answer_text = response.choices[0].message.content.strip()
@@ -850,7 +886,20 @@ def generate_guide(notebook_ids: List[str], max_points: int = 5) -> Dict[str, An
             guide_content["total_knowledge_points"] = len(guide_content.get("knowledge_points", []))
         
         # Ensure each knowledge point has questions - generate if missing
+        # Also validate content structure (support both old string format and new structured format)
         for kp in guide_content.get("knowledge_points", []):
+            # Validate content structure - if it's a string, keep it (backward compatibility)
+            # If it's missing or invalid object, we'll handle it in frontend
+            content_field = kp.get("content")
+            if content_field and isinstance(content_field, str):
+                # Old format - string content (backward compatible)
+                pass
+            elif content_field and isinstance(content_field, dict):
+                # New format - structured content
+                # Validate required fields exist
+                if not any(key in content_field for key in ["intuition", "definition", "how_it_works"]):
+                    print(f"[WARNING] Knowledge point {kp.get('knowledge_point_number', '?')} has structured content but missing required fields")
+            
             if "questions" not in kp or not kp.get("questions") or len(kp.get("questions", [])) == 0:
                 print(f"[GUIDE] Knowledge point {kp.get('knowledge_point_number', '?')} missing questions, generating...")
                 kp["questions"] = generate_questions_for_step(
@@ -900,6 +949,157 @@ def generate_learning_summary(
     """
     if not is_guide_configured():
         return "# Learning Summary\n\nYou have completed the guided learning session!"
+
+
+def generate_guide_plan(notebook_ids: List[str], max_points: int = 12) -> Dict[str, Any]:
+    """
+    Generates a plan for creating a learning guide.
+    """
+    if not is_guide_configured():
+        return {
+            "success": False,
+            "error": "OpenAI API not configured. Set OPENAI_API_KEY in .env",
+            "plan": None
+        }
+
+    try:
+        # Step 1: Extract content from notebooks to get an idea of the scope
+        content = extract_notebook_content(notebook_ids)
+        notebook_names = ", ".join(content.get("notebook_names", []))
+        
+        # Summarize content for the plan
+        content_summary = []
+        if content.get("solves"):
+            content_summary.append(f"{len(content['solves'])} solved problems")
+        if content.get("questions"):
+            content_summary.append(f"{len(content['questions'])} question sets")
+        if content.get("research"):
+            content_summary.append(f"{len(content['research'])} research summaries")
+        if content.get("notes"):
+            content_summary.append(f"{len(content['notes'])} notes")
+        
+        summary_text = f"Content from {len(notebook_ids)} notebooks ({notebook_names}): {', '.join(content_summary) or 'No specific items found.'}"
+
+        plan_prompt = f"""You are an AI planning assistant. Create a detailed plan for generating a comprehensive learning guide.
+
+The guide will be based on the following user-provided notebook content:
+{summary_text}
+
+The user wants a guide with approximately {max_points} knowledge points.
+
+Your plan should include:
+- A clear title for the plan
+- A brief description of the overall goal
+- A list of sequential steps, each with:
+    - A description of the action
+    - An estimated time (e.g., "1-2 minutes")
+    - Key outcomes
+- An overall estimated total time
+- A list of key topics/concepts that will likely be covered.
+
+Return the plan as a JSON object:
+{{
+  "title": "Plan for Learning Guide Generation",
+  "description": "Generate a personalized learning guide based on selected notebook content.",
+  "steps": [
+    {{
+      "action": "Extract and consolidate content from selected notebooks",
+      "estimated_time": "30 seconds",
+      "outcome": "All relevant notes, questions, and research items are gathered."
+    }},
+    {{
+      "action": "Analyze extracted content to identify core concepts and learning objectives",
+      "estimated_time": "1 minute",
+      "outcome": "Key themes and a logical learning progression are determined."
+    }},
+    {{
+      "action": "Generate {max_points} structured knowledge points with in-depth explanations",
+      "estimated_time": "2-3 minutes",
+      "outcome": "A comprehensive learning guide structure is created, focusing on WHAT, WHY, and HOW."
+    }},
+    {{
+      "action": "Match existing questions from notebooks to each knowledge point",
+      "estimated_time": "30 seconds",
+      "outcome": "Relevant practice questions are integrated for interactive learning."
+    }},
+    {{
+      "action": "Finalize guide content and prepare for display",
+      "estimated_time": "15 seconds",
+      "outcome": "The complete learning guide is ready for the student."
+    }}
+  ],
+  "total_estimated_time": "5-7 minutes",
+  "key_topics_covered": ["Topic 1", "Topic 2", "Topic 3"]
+}}
+"""
+        
+        http_client = create_http_client(timeout=60.0) if create_http_client else None
+        client = OpenAI(http_client=http_client) if http_client else OpenAI(api_key=OPENAI_API_KEY)
+        
+        response = client.chat.completions.create(
+            model=LLM_MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an AI planning assistant. Generate plans in valid JSON format. Return only the JSON object, no additional text."
+                },
+                {
+                    "role": "user",
+                    "content": plan_prompt
+                }
+            ],
+            temperature=0.3,
+            max_tokens=1000,
+        )
+        
+        plan_text = response.choices[0].message.content.strip()
+        
+        import json
+        import re
+        
+        try:
+            plan = json.loads(plan_text)
+        except json.JSONDecodeError:
+            json_match = re.search(r'\{[\s\S]*\}', plan_text, re.MULTILINE)
+            if json_match:
+                try:
+                    plan = json.loads(json_match.group())
+                except:
+                    plan = {
+                        "title": "Fallback Plan",
+                        "description": "Could not parse plan. Proceeding with standard guide generation.",
+                        "steps": [],
+                        "total_estimated_time": "Unknown",
+                        "key_topics_covered": []
+                    }
+            else:
+                plan = {
+                    "title": "Fallback Plan",
+                    "description": plan_text[:500] if plan_text else "Could not generate plan.",
+                    "steps": [],
+                    "total_estimated_time": "Unknown",
+                    "key_topics_covered": []
+                }
+        
+        plan.setdefault("title", "Generated Plan")
+        plan.setdefault("description", "A plan for generating content.")
+        plan.setdefault("steps", [])
+        plan.setdefault("total_estimated_time", "Unknown")
+        plan.setdefault("key_topics_covered", [])
+
+        return {
+            "success": True,
+            "plan": plan
+        }
+    except Exception as e:
+        print(f"[ERROR] Failed to generate guide plan: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "error": f"Failed to generate plan: {str(e)}",
+            "plan": None
+        }
     
     try:
         knowledge_points = content.get("knowledge_points") or content.get("steps", [])
