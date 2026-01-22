@@ -66,6 +66,13 @@ export const api = {
       question_type?: string;
       count?: number;
     }) => apiClient.post('/api/v1/question/generate', data),
+    evaluate: (data: {
+      question: any;
+      user_answer: string;
+      knowledge_point?: string;
+      knowledge_base_id?: string;
+      auto_save_to_notebook?: boolean;
+    }) => apiClient.post('/api/v1/question/evaluate', data),
     mimic: (data: { knowledge_base_id: string }, file: File) => {
       const formData = new FormData();
       formData.append('file', file);
@@ -118,6 +125,16 @@ export const api = {
       apiClient.get(`/api/v1/guide/${sessionId}`),
     next: (sessionId: string) =>
       apiClient.post(`/api/v1/guide/${sessionId}/next`),
+    submitAnswer: (sessionId: string, data: {
+      step_number: number;
+      question_index: number;
+      answer: string;
+    }) =>
+      apiClient.post(`/api/v1/guide/${sessionId}/answer`, data),
+    chat: (sessionId: string, data: { message: string }) =>
+      apiClient.post(`/api/v1/guide/${sessionId}/chat`, data),
+    summary: (sessionId: string) =>
+      apiClient.get(`/api/v1/guide/${sessionId}/summary`),
   },
 
   // Co-Writer

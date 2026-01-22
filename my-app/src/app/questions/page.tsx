@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
-import { HelpCircle, Send, Loader2, BookOpen, CheckCircle2, XCircle } from 'lucide-react';
+import { HelpCircle, Send, Loader2, BookOpen, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 import SaveToNotebook from '@/components/SaveToNotebook';
 
 interface KnowledgeBase {
@@ -18,6 +18,23 @@ interface Question {
   options?: string[];
 }
 
+interface Evaluation {
+  score: number;
+  feedback: string;
+  is_correct: boolean;
+  suggestions?: string[];
+  strengths?: string[];
+  areas_for_improvement?: string[];
+}
+
+interface QuestionState {
+  userAnswer: string;
+  evaluation: Evaluation | null;
+  evaluating: boolean;
+  evaluated: boolean;
+  savedToNotebook: boolean;
+}
+
 export default function QuestionsPage() {
   const [knowledgePoint, setKnowledgePoint] = useState('');
   const [selectedKB, setSelectedKB] = useState<string | null>(null);
@@ -29,6 +46,7 @@ export default function QuestionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([]);
   const [showAnswers, setShowAnswers] = useState<{ [key: number]: boolean }>({});
+  const [questionStates, setQuestionStates] = useState<{ [key: number]: QuestionState }>({});
 
   useEffect(() => {
     loadKnowledgeBases();
@@ -63,6 +81,7 @@ export default function QuestionsPage() {
     setQuestions([]);
     setError(null);
     setShowAnswers({});
+    setQuestionStates({});
 
     try {
       const response = await api.question.generate({
@@ -91,6 +110,76 @@ export default function QuestionsPage() {
       ...prev,
       [idx]: !prev[idx]
     }));
+  };
+
+  const handleAnswerChange = (idx: number, answer: string) => {
+    setQuestionStates(prev => ({
+      ...prev,
+      [idx]: {
+        ...prev[idx],
+        userAnswer: answer,
+        evaluated: false,
+        evaluation: null,
+      }
+    }));
+  };
+
+  const handleSubmitAnswer = async (idx: number, question: Question) => {
+    const state = questionStates[idx];
+    if (!state || !state.userAnswer.trim()) {
+      setError('Please enter an answer');
+      return;
+    }
+
+    // Set evaluating state
+    setQuestionStates(prev => ({
+      ...prev,
+      [idx]: {
+        ...prev[idx],
+        evaluating: true,
+      }
+    }));
+
+    try {
+      const response = await api.question.evaluate({
+        question: question,
+        user_answer: state.userAnswer,
+        knowledge_point: knowledgePoint,
+        knowledge_base_id: selectedKB || undefined,
+        auto_save_to_notebook: true,
+      });
+
+      if (response.data.success) {
+        const evaluation = response.data.evaluation;
+        setQuestionStates(prev => ({
+          ...prev,
+          [idx]: {
+            ...prev[idx],
+            evaluation: evaluation,
+            evaluated: true,
+            evaluating: false,
+            savedToNotebook: response.data.saved_to_notebook || false,
+          }
+        }));
+
+        if (response.data.saved_to_notebook) {
+          // Show success message
+          setTimeout(() => {
+            alert('Your answer was saved to "Learning Gaps" notebook for review!');
+          }, 100);
+        }
+      }
+    } catch (error: any) {
+      console.error('Failed to evaluate answer:', error);
+      setError(error.response?.data?.detail || error.message || 'Failed to evaluate answer');
+      setQuestionStates(prev => ({
+        ...prev,
+        [idx]: {
+          ...prev[idx],
+          evaluating: false,
+        }
+      }));
+    }
   };
 
   return (
@@ -255,81 +344,224 @@ export default function QuestionsPage() {
               </div>
               
               <div className="space-y-6">
-                {questions.map((q, idx) => (
-                  <div key={idx} className="border border-zinc-200 dark:border-zinc-700 rounded-lg p-5">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
-                            Question {idx + 1}
-                          </span>
-                          <span className="text-xs px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded text-zinc-600 dark:text-zinc-400">
-                            {q.difficulty || difficulty}
-                          </span>
+                {questions.map((q, idx) => {
+                  const state = questionStates[idx] || {
+                    userAnswer: '',
+                    evaluation: null,
+                    evaluating: false,
+                    evaluated: false,
+                    savedToNotebook: false,
+                  };
+
+                  return (
+                    <div key={idx} className="border border-zinc-200 dark:border-zinc-700 rounded-lg p-5">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                              Question {idx + 1}
+                            </span>
+                            <span className="text-xs px-2 py-1 bg-zinc-100 dark:bg-zinc-800 rounded text-zinc-600 dark:text-zinc-400">
+                              {q.difficulty || difficulty}
+                            </span>
+                            {state.evaluated && state.evaluation && (
+                              <span className={`text-xs px-2 py-1 rounded ${
+                                state.evaluation.is_correct
+                                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'
+                                  : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300'
+                              }`}>
+                                Score: {Math.round(state.evaluation.score * 100)}%
+                              </span>
+                            )}
+                            {state.savedToNotebook && (
+                              <span className="text-xs px-2 py-1 bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 rounded">
+                                Saved to Learning Gaps
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-zinc-900 dark:text-zinc-50 font-medium mb-3">
+                            {q.question}
+                          </p>
                         </div>
-                        <p className="text-zinc-900 dark:text-zinc-50 font-medium mb-3">
-                          {q.question}
-                        </p>
                       </div>
-                    </div>
 
-                    {q.type === 'multiple_choice' && q.options && q.options.length > 0 && (
-                      <div className="ml-4 mb-4">
-                        <ul className="space-y-2">
-                          {q.options.map((option, optIdx) => {
-                            const isCorrect = option === q.answer || 
-                              (q.answer && option.toLowerCase().includes(q.answer.toLowerCase()));
-                            const showAnswer = showAnswers[idx];
-                            
-                            return (
-                              <li
-                                key={optIdx}
-                                className={`flex items-center gap-2 p-2 rounded ${
-                                  showAnswer && isCorrect
-                                    ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-                                    : 'bg-zinc-50 dark:bg-zinc-800'
-                                }`}
-                              >
-                                <span className="font-medium text-zinc-600 dark:text-zinc-400 w-6">
-                                  {String.fromCharCode(65 + optIdx)}.
-                                </span>
-                                <span className="flex-1 text-zinc-700 dark:text-zinc-300">
-                                  {option}
-                                </span>
-                                {showAnswer && isCorrect && (
-                                  <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
-                                )}
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                    )}
+                      {/* Answer Input Section */}
+                      {!state.evaluated && (
+                        <div className="mb-4">
+                          {q.type === 'multiple_choice' && q.options && q.options.length > 0 ? (
+                            <div className="ml-4 mb-4">
+                              <ul className="space-y-2">
+                                {q.options.map((option, optIdx) => {
+                                  const isSelected = state.userAnswer === option;
+                                  return (
+                                    <li
+                                      key={optIdx}
+                                      className={`flex items-center gap-2 p-2 rounded cursor-pointer transition-colors ${
+                                        isSelected
+                                          ? 'bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-300 dark:border-blue-700'
+                                          : 'bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700'
+                                      }`}
+                                      onClick={() => handleAnswerChange(idx, option)}
+                                    >
+                                      <input
+                                        type="radio"
+                                        name={`question-${idx}`}
+                                        checked={isSelected}
+                                        onChange={() => handleAnswerChange(idx, option)}
+                                        className="w-4 h-4 text-blue-600"
+                                      />
+                                      <span className="font-medium text-zinc-600 dark:text-zinc-400 w-6">
+                                        {String.fromCharCode(65 + optIdx)}.
+                                      </span>
+                                      <span className="flex-1 text-zinc-700 dark:text-zinc-300">
+                                        {option}
+                                      </span>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          ) : (
+                            <textarea
+                              value={state.userAnswer}
+                              onChange={(e) => handleAnswerChange(idx, e.target.value)}
+                              placeholder="Type your answer here..."
+                              className="w-full px-4 py-3 border border-zinc-300 dark:border-zinc-700 rounded-md bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 min-h-[100px]"
+                              disabled={state.evaluating}
+                            />
+                          )}
 
-                    <button
-                      onClick={() => toggleAnswer(idx)}
-                      className="mt-3 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                    >
-                      {showAnswers[idx] ? 'Hide Answer' : 'Show Answer'}
-                    </button>
+                          <button
+                            onClick={() => handleSubmitAnswer(idx, q)}
+                            disabled={!state.userAnswer.trim() || state.evaluating}
+                            className="mt-3 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {state.evaluating ? (
+                              <>
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                Evaluating...
+                              </>
+                            ) : (
+                              <>
+                                <Send className="h-4 w-4 mr-2" />
+                                Submit Answer
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
 
-                    {showAnswers[idx] && (
-                      <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
-                        <div className="flex items-start gap-2">
-                          <CheckCircle2 className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                          <div>
-                            <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
-                              Answer:
-                            </p>
-                            <p className="text-sm text-blue-800 dark:text-blue-200">
-                              {q.answer}
-                            </p>
+                      {/* Evaluation Feedback */}
+                      {state.evaluated && state.evaluation && (
+                        <div className={`mt-4 p-4 rounded-lg border ${
+                          state.evaluation.is_correct
+                            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                            : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                        }`}>
+                          <div className="flex items-start gap-2 mb-2">
+                            {state.evaluation.is_correct ? (
+                              <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                            ) : (
+                              <XCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                            )}
+                            <div className="flex-1">
+                              <p className={`text-sm font-medium mb-1 ${
+                                state.evaluation.is_correct
+                                  ? 'text-green-900 dark:text-green-100'
+                                  : 'text-red-900 dark:text-red-100'
+                              }`}>
+                                {state.evaluation.is_correct ? 'Correct!' : 'Needs Improvement'}
+                              </p>
+                              <p className={`text-sm ${
+                                state.evaluation.is_correct
+                                  ? 'text-green-800 dark:text-green-200'
+                                  : 'text-red-800 dark:text-red-200'
+                              }`}>
+                                {state.evaluation.feedback}
+                              </p>
+
+                              {state.evaluation.strengths && state.evaluation.strengths.length > 0 && (
+                                <div className="mt-3">
+                                  <p className="text-xs font-medium text-green-900 dark:text-green-100 mb-1">Strengths:</p>
+                                  <ul className="text-xs text-green-800 dark:text-green-200 list-disc list-inside">
+                                    {state.evaluation.strengths.map((strength, i) => (
+                                      <li key={i}>{strength}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              {state.evaluation.areas_for_improvement && state.evaluation.areas_for_improvement.length > 0 && (
+                                <div className="mt-3">
+                                  <p className="text-xs font-medium text-red-900 dark:text-red-100 mb-1">Areas for Improvement:</p>
+                                  <ul className="text-xs text-red-800 dark:text-red-200 list-disc list-inside">
+                                    {state.evaluation.areas_for_improvement.map((area, i) => (
+                                      <li key={i}>{area}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+
+                              {state.evaluation.suggestions && state.evaluation.suggestions.length > 0 && (
+                                <div className="mt-3">
+                                  <p className="text-xs font-medium text-zinc-900 dark:text-zinc-100 mb-1">Suggestions:</p>
+                                  <ul className="text-xs text-zinc-700 dark:text-zinc-300 list-disc list-inside">
+                                    {state.evaluation.suggestions.map((suggestion, i) => (
+                                      <li key={i}>{suggestion}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                      )}
+
+                      {/* Show Correct Answer (after evaluation) */}
+                      {state.evaluated && (
+                        <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
+                          <div className="flex items-start gap-2">
+                            <CheckCircle2 className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
+                                Correct Answer:
+                              </p>
+                              <p className="text-sm text-blue-800 dark:text-blue-200">
+                                {q.answer}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Show Answer Button (if not evaluated yet) */}
+                      {!state.evaluated && (
+                        <button
+                          onClick={() => toggleAnswer(idx)}
+                          className="mt-3 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          {showAnswers[idx] ? 'Hide Answer' : 'Show Answer'}
+                        </button>
+                      )}
+
+                      {showAnswers[idx] && !state.evaluated && (
+                        <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
+                          <div className="flex items-start gap-2">
+                            <CheckCircle2 className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
+                                Answer:
+                              </p>
+                              <p className="text-sm text-blue-800 dark:text-blue-200">
+                                {q.answer}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
